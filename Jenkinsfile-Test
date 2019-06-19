@@ -1,0 +1,26 @@
+def volumes = [ hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock') ]
+
+podTemplate(
+    label: 'test',
+    containers: [
+        // containerTemplate(name: 'maven', image: maven, ttyEnabled: true, command: 'cat'),
+        containerTemplate(name: 'docker', image: 'docker:18.06.1-ce', command: 'cat', ttyEnabled: true,
+            envVars: [
+                containerEnvVar(key: 'DOCKER_API_VERSION', value: '1.23.0')
+            ]),
+        // containerTemplate(name: 'kubectl', image: kubectl, ttyEnabled: true, command: 'cat'),
+        // containerTemplate(name: 'helm', image: helm, ttyEnabled: true, command: 'cat')
+    ],
+    volumes: volumes
+    ) {
+        node('test'){
+            stage('Build'){
+                checkout scm
+                container('docker') {
+                    echo 'Start Building'
+                    docker build -t myliberty .
+                    echo 'Finished Building Image'
+                }
+            }
+        }
+    }
