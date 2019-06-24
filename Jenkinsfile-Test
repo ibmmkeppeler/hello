@@ -28,6 +28,9 @@ def volumes = [ hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/va
 if (registrySecret) {
   volumes += secretVolume(secretName: registrySecret, mountPath: '/msb_reg_sec')
 }
+if (helmSecret) {
+    volumes += secretVolume(secretName: helmSecret, mountPath: '/msb_helm_sec')
+}
 
 podTemplate(
     label: 'test',
