@@ -148,7 +148,10 @@ podTemplate(
             }
 
 	    stage ('Deploy') {
-	       echo'Deploy in helm char'
+	       echo'Deploy helm chart'
+               echo "testing against namespace " + testNamespace
+               String tempHelmRelease = (image + "-" + namespace)
+
                container ('kubectl') {
 	          echo 'In kubectl container'
 /*------------------------
