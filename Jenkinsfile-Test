@@ -149,7 +149,7 @@ podTemplate(
 
 	    stage ('Deploy') {
 	       echo'Deploy helm chart'
-               echo "testing against namespace " + testNamespace
+               echo "testing against namespace " + namespace
                String tempHelmRelease = (image + "-" + namespace)
 
                container ('kubectl') {
