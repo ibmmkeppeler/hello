@@ -138,8 +138,8 @@ podTemplate(
 	       echo'Deploy in helm char'
                container ('kubectl') {
 	          echo 'In kubectl container'
-	          kubectl get namespace ${namespace}
 /*------------------------
+	          kubectl get namespace ${namespace}
 	           if [ $? -eq 0 ]; then
 	            echo "Namespace ${namespace} exists
 	          else
