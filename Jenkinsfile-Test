@@ -115,7 +115,7 @@ podTemplate(
                      }
                      sh buildCommand
                      if (registry) {
-		        sh "docker login -u=\${dockerUser} -p=\${dockerPassword} ${registry}
+		        sh "docker login -u=\${dockerUser} -p=\${dockerPassword} ${registry}"
                         sh "docker tag ${image}:${imageTag} ${registry}/${image}:${imageTag}"
 		        echo 'Pushing to Docker registry'
                         sh "docker push ${registry}${image}:${imageTag}"
