@@ -1,3 +1,8 @@
+import com.cloudbees.groovy.cps.NonCPS
+import java.io.File
+import java.util.UUID
+import groovy.json.JsonOutput;
+import groovy.json.JsonSlurperClassic;
 
 def build = (env.BUILD ?: "true").toBoolean()
 def deploy = (env.DEPLOY ?: "true").toBoolean()
@@ -10,11 +15,13 @@ def alwaysPullImage = (env.ALWAYS_PULL_IMAGE == null) ? true : env.ALWAYS_PULL_I
 def libertyLicenseJarBaseUrl = (env.LIBERTY_LICENSE_JAR_BASE_URL ?: "").trim()
 def registry = (env.REGISTRY ?: "icptest.icp:8500").trim()
 if (registry && !registry.endsWith('/')) registry = "${registry}/"
-def registrySecret = (env.REGISTRY_SECRET ?: "").trim()
+def registrySecret = (env.REGISTRY_SECRET ?: "registrysecret").trim()
 def dockerUser = (env.DOCKER_USER ?: "admin").trim()
 def dockerPassword = (env.DOCKER_PASSWORD ?: "5e914c585c2b51edfd1213f059dd38a3").trim()
 def namespace = (env.NAMESPACE ?: "default").trim()
 def serviceAccountName = (env.SERVICE_ACCOUNT_NAME ?: "default").trim()
+def chartFolder = (env.CHART_FOLDER ?: "chart").trim()
+def helmSecret = (env.HELM_SECRET ?: "").trim()
 
 def volumes = [ hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock') ]
 if (registrySecret) {
@@ -127,5 +134,117 @@ podTemplate(
                    print "Error in Docker build: " + ex.toString()
 	       }
             }
+	    stage ('Deploy') {
+	       echo'Deploy in helm char'
+               container ('kubectl') {
+	          echo 'In kubectl container'
+	          kubectl get namespace ${namespace}
+	          if [ $? -eq 0 ]; then
+	            echo "Namespace ${namespace} exists
+	          else
+                     def NSCreationAttempt = sh(returnStatus: true, script: "kubectl create namespace ${namespace} > ns_creation_attempt.txt")
+                     if (NSCreationAttempt != 0) {
+                        echo "Warning, did not create the test namespace successfully, error code is: ${NSCreationAttempt}"		
+                     }
+                     if (registrySecret) {
+		        // Give access to the private registry
+                        sh "kubectl get secret ${registrySecret} -o json | sed 's/\"namespace\":.*\$/\"namespace\": \"${namespace}\",/g' | kubectl create -f -"
+                        sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"${registrySecret}\"}]}' --namespace ${namespace}"
+                     }
+	          fi
+               }	
+               container ('helm') {
+                  echo "Attempting to deploy the test release"
+                  def deployCommand = "helm install ${realChartFolder} --wait --set test=true --values pipeline.yaml --namespace ${namespace} --name ${tempHelmRelease}"
+                  if (fileExists("chart/overrides.yaml")) {
+                     deployCommand += " --values chart/overrides.yaml"
+                  }
+                  if (helmSecret) {
+                     echo "Adding --tls to your deploy command"
+                     deployCommand += helmTlsOptions
+                  }
+                  testDeployAttempt = sh(script: "${deployCommand} > deploy_attempt.txt", returnStatus: true)
+                  if (testDeployAttempt != 0) {
+                     echo "Warning, did not deploy the test release into the test namespace successfully, error code is: ${testDeployAttempt}" 
+                     echo "This build will be marked as a failure: halting after the deletion of the test namespace."
+                  }
+                  printFromFile("deploy_attempt.txt")
+               }
+	    }
          }
       }
+      
+def printTime(String message) {
+   time = new Date().format("ddMMyy.HH:mm.ss", TimeZone.getTimeZone('Europe/Amsterdam'))
+   println "Timing, $message: $time"
+}
+
+def printFromFile(String fileName) {
+   def output = readFile(fileName).trim()
+   echo output
+}
+
+def getChartFolder(String userSpecified, String currentChartFolder) {
+
+  def newChartLocation = ""
+  if (userSpecified) {
+    print "User defined chart location specified: ${userSpecified}"
+    return userSpecified
+  } else {
+    print "Finding actual chart folder below ${env.WORKSPACE}/${currentChartFolder}..."
+    def fp = new hudson.FilePath(Jenkins.getInstance().getComputer(env['NODE_NAME']).getChannel(), env.WORKSPACE + "/" + currentChartFolder)
+    def dirList = fp.listDirectories()
+    if (dirList.size() > 1) {
+      print "More than one directory in ${env.WORKSPACE}/${currentChartFolder}..."
+      print "Directories found are:"
+      def yamlList = []
+      for (d in dirList) {
+        print "${d}"
+        def fileToTest = new hudson.FilePath(d, "Chart.yaml")
+        if (fileToTest.exists()) {
+          yamlList.add(d)
+        }
+      }
+      if (yamlList.size() > 1) {
+        print "-----------------------------------------------------------"
+        print "*** More than one directory with Chart.yaml in ${env.WORKSPACE}/${currentChartFolder}."
+        print "*** Please specify chart folder to use in your Jenkinsfile."
+        print "*** Returning null."
+        print "-----------------------------------------------------------"
+        return null
+      } else {
+        if (yamlList.size() == 1) {
+          newChartLocation = currentChartFolder + "/" + yamlList.get(0).getName()
+          print "Chart.yaml found in ${newChartLocation}, setting as realChartFolder"
+          return newChartLocation
+        } else {
+          print "-----------------------------------------------------------"
+          print "*** No sub directory in ${env.WORKSPACE}/${currentChartFolder} contains a Chart.yaml, returning null"
+          print "-----------------------------------------------------------"
+          return null
+        }
+      }
+    } else {
+      if (dirList.size() == 1) {
+        def chartFile = new hudson.FilePath(dirList.get(0), "Chart.yaml")
+        newChartLocation = currentChartFolder + "/" + dirList.get(0).getName()
+        if (chartFile.exists()) {
+          print "Only one child directory found, setting realChartFolder to: ${newChartLocation}"
+          return newChartLocation
+        } else {
+          print "-----------------------------------------------------------"
+          print "*** Chart.yaml file does not exist in ${newChartLocation}, returning null"
+          print "-----------------------------------------------------------"
+          return null
+        }
+      } else {
+        print "-----------------------------------------------------------"
+        print "*** Chart directory ${env.WORKSPACE}/${currentChartFolder} has no subdirectories, returning null"
+        print "-----------------------------------------------------------"
+        return null
+      }
+    }
+  }
+}
+
+
