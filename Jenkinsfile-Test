@@ -1,9 +1,10 @@
 def volumes = [ hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock') ]
+def mavenSettingsConfigMap = env.MAVEN_SETTINGS_CONFIG_MAP?.trim()
 
 podTemplate(
     label: 'test',
     containers: [
-        // containerTemplate(name: 'maven', image: maven, ttyEnabled: true, command: 'cat'),
+        containerTemplate(name: 'maven', image: 'maven:3.6.0-jdk-8-alpine', ttyEnabled: true, command: 'cat'),
         containerTemplate(name: 'docker', image: 'docker:18.06.1-ce', command: 'cat', ttyEnabled: true,
             envVars: [
                 containerEnvVar(key: 'DOCKER_API_VERSION', value: '1.23.0')
@@ -14,6 +15,21 @@ podTemplate(
     volumes: volumes
     ) {
         node('test'){
+            stage ('Maven Build') {
+               try {
+                   container ('maven') {
+                       def mvnCommand = "mvn -B"
+                       if (mavenSettingsConfigMap) {
+                           mvnCommand += " --settings /msb_mvn_cfg/settings.xml"
+                       }
+                       mvnCommand += " ${mvnCommands}"
+                       sh mvnCommand
+	                   printTime("Done Maven build")
+                   }
+               } catch(Exception ex) {
+                   print "Error in Maven build:" + ex.toString()
+               }
+            }
             stage('Build'){
                 checkout scm
                 container('docker') {
