@@ -134,6 +134,19 @@ podTemplate(
                    print "Error in Docker build: " + ex.toString()
 	       }
             }
+	    
+	    def realChartFolder = null
+            def testsAttempted = false
+	    
+            if (fileExists(chartFolder)) {
+               // find the likely chartFolder location
+               realChartFolder = getChartFolder(userSpecifiedChartFolder, chartFolder)
+               def yamlContent = "image:"
+               yamlContent += "\n  repository: ${registry}${namespace}/${image}"
+               if (imageTag) yamlContent += "\n  tag: \\\"${imageTag}\\\""
+               sh "echo \"${yamlContent}\" > pipeline.yaml"
+            }
+
 	    stage ('Deploy') {
 	       echo'Deploy in helm char'
                container ('kubectl') {
