@@ -8,9 +8,11 @@ def test = (env.TEST ?: "true").toBoolean()
 def image = (env.IMAGE ?: "hello-container").trim()
 def alwaysPullImage = (env.ALWAYS_PULL_IMAGE == null) ? true : env.ALWAYS_PULL_IMAGE.toBoolean()
 def libertyLicenseJarBaseUrl = (env.LIBERTY_LICENSE_JAR_BASE_URL ?: "").trim()
-def registry = (env.REGISTRY ?: "icptest.icp:8500/").trim()
+def registry = (env.REGISTRY ?: "icptest.icp:8500").trim()
 if (registry && !registry.endsWith('/')) registry = "${registry}/"
 def registrySecret = (env.REGISTRY_SECRET ?: "").trim()
+def dockerUser = (env.DOCKER_USER ?: "admin").trim()
+def dockerPassword = (env.DOCKER_PASSWORD ?: "5e914c585c2b51edfd1213f059dd38a3").trim()
 def namespace = (env.NAMESPACE ?: "default").trim()
 def serviceAccountName = (env.SERVICE_ACCOUNT_NAME ?: "default").trim()
 
@@ -113,7 +115,8 @@ podTemplate(
                      }
                      sh buildCommand
                      if (registry) {
-                        sh "docker tag ${image}:${imageTag} ${registry}${image}:${imageTag}"
+		        sh "docker login -u=\${dockerUser} -p=\${dockerPassword} ${registry}
+                        sh "docker tag ${image}:${imageTag} ${registry}/${image}:${imageTag}"
 		        echo 'Pushing to Docker registry'
                         sh "docker push ${registry}${image}:${imageTag}"
 		        'Done pushing to Docker registry'
