@@ -1,11 +1,22 @@
-def volumes = [ hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock') ]
-def mavenSettingsConfigMap = env.MAVEN_SETTINGS_CONFIG_MAP?.trim()
 
 def build = (env.BUILD ?: "true").toBoolean()
 def deploy = (env.DEPLOY ?: "true").toBoolean()
 def mvnCommands = (env.mvnCommands == null) ? 'package' : env.mvnCommands
+def mavenSettingsConfigMap = env.MAVEN_SETTINGS_CONFIG_MAP?.trim()
 def test = (env.TEST ?: "true").toBoolean()
 
+def image = (env.IMAGE ?: "hello-container").trim()
+def alwaysPullImage = (env.ALWAYS_PULL_IMAGE == null) ? true : env.ALWAYS_PULL_IMAGE.toBoolean()
+def libertyLicenseJarBaseUrl = (env.LIBERTY_LICENSE_JAR_BASE_URL ?: "").trim()
+def registry = (env.REGISTRY ?: "https://icptest.icp:8500/").trim()
+if (registry && !registry.endsWith('/')) registry = "${registry}/"
+def registrySecret = (env.REGISTRY_SECRET ?: "").trim()
+def serviceAccountName = (env.SERVICE_ACCOUNT_NAME ?: "default").trim()
+
+def volumes = [ hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock') ]
+if (registrySecret) {
+  volumes += secretVolume(secretName: registrySecret, mountPath: '/msb_reg_sec')
+}
 
 podTemplate(
     label: 'test',
@@ -25,6 +36,8 @@ podTemplate(
             def previousCommit
             def gitCommitMessage
             def fullCommitID
+	    
+	    def imageTag = null
 
             stage ('Extract') {
 	       try {
@@ -62,15 +75,52 @@ podTemplate(
                }
             }
             stage('Build'){
-                checkout scm
-                container('docker') {
-                    sh """
-                    echo 'Start Building'
-                    #!/bin/bash
-                    docker build -t hello-container:latest .
-                    echo 'Finished Building Image'
-                    """
-                }
+	       try {
+                  // checkout scm
+                  container('docker') {
+                     echo 'Start Building Image'
+		     
+		     imageTag = gitCommit
+                     def buildCommand = "docker build -t ${image}:${imageTag} "
+                     buildCommand += "--label org.label-schema.schema-version=\"1.0\" "
+                     def scmUrl = scm.getUserRemoteConfigs()[0].getUrl()
+                     buildCommand += "--label org.label-schema.vcs-url=\"${scmUrl}\" "
+                     buildCommand += "--label org.label-schema.vcs-ref=\"${gitCommit}\" "  
+                     buildCommand += "--label org.label-schema.name=\"${image}\" "
+                     def buildDate = sh(returnStdout: true, script: "date -Iseconds").trim()
+                     buildCommand += "--label org.label-schema.build-date=\"${buildDate}\" "
+                     if (alwaysPullImage) {
+                        buildCommand += " --pull=true"
+                     }
+                     if (previousCommit) {
+                        buildCommand += " --cache-from ${registry}${image}:${previousCommit}"
+                     }
+                     if (libertyLicenseJarBaseUrl) {
+                        if (readFile('Dockerfile').contains('LICENSE_JAR_URL')) {
+                           buildCommand += " --build-arg LICENSE_JAR_URL=" + libertyLicenseJarBaseUrl
+                           if (!libertyLicenseJarBaseUrl.endsWith("/")) {
+                              buildCommand += "/"
+                           }
+                           buildCommand += libertyLicenseJarName
+                        }
+                     }
+                     buildCommand += " ."
+		     if (registrySecret) {
+                        sh "ln -s -f /msb_reg_sec/.dockercfg /home/jenkins/.dockercfg"
+                        sh "mkdir -p /home/jenkins/.docker"
+                        sh "ln -s -f /msb_reg_sec/.dockerconfigjson /home/jenkins/.docker/config.json"
+                     }
+                     sh buildCommand
+                     if (registry) {
+                        sh "docker tag ${image}:${imageTag} ${registry}${image}:${imageTag}"
+		        echo 'Pushing to Docker registry'
+                        sh "docker push ${registry}${image}:${imageTag}"
+		        'Done pushing to Docker registry'
+                     }
+		  }
+               } catch(Exception ex) {
+                   print "Error in Docker build: " + ex.toString()
+	       }
             }
-        }
-    }
+         }
+      }
