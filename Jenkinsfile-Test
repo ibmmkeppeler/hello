@@ -1,6 +1,12 @@
 def volumes = [ hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock') ]
 def mavenSettingsConfigMap = env.MAVEN_SETTINGS_CONFIG_MAP?.trim()
 
+def build = (env.BUILD ?: "true").toBoolean()
+def deploy = (env.DEPLOY ?: "true").toBoolean()
+def mvnCommands = (env.mvnCommands == null) ? 'package' : env.mvnCommands
+def test = (config.test ?: (env.TEST ?: "false").trim()).toLowerCase() == 'true'
+
+
 podTemplate(
     label: 'test',
     containers: [
