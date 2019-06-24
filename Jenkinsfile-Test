@@ -55,7 +55,7 @@ podTemplate(
                        }
                        mvnCommand += " ${mvnCommands}"
                        sh mvnCommand
-	                   printTime("Done Maven build")
+		       echo 'Finished Maven Build'
                    }
                } catch(Exception ex) {
                    print "Error in Maven build:" + ex.toString()
