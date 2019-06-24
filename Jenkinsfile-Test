@@ -8,9 +8,10 @@ def test = (env.TEST ?: "true").toBoolean()
 def image = (env.IMAGE ?: "hello-container").trim()
 def alwaysPullImage = (env.ALWAYS_PULL_IMAGE == null) ? true : env.ALWAYS_PULL_IMAGE.toBoolean()
 def libertyLicenseJarBaseUrl = (env.LIBERTY_LICENSE_JAR_BASE_URL ?: "").trim()
-def registry = (env.REGISTRY ?: "https://icptest.icp:8500/").trim()
+def registry = (env.REGISTRY ?: "icptest.icp:8500/").trim()
 if (registry && !registry.endsWith('/')) registry = "${registry}/"
 def registrySecret = (env.REGISTRY_SECRET ?: "").trim()
+def namespace = (env.NAMESPACE ?: "default").trim()
 def serviceAccountName = (env.SERVICE_ACCOUNT_NAME ?: "default").trim()
 
 def volumes = [ hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock') ]
