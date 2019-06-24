@@ -139,7 +139,8 @@ podTemplate(
                container ('kubectl') {
 	          echo 'In kubectl container'
 	          kubectl get namespace ${namespace}
-	          if [ $? -eq 0 ]; then
+/*------------------------
+	           if [ $? -eq 0 ]; then
 	            echo "Namespace ${namespace} exists
 	          else
                      def NSCreationAttempt = sh(returnStatus: true, script: "kubectl create namespace ${namespace} > ns_creation_attempt.txt")
@@ -152,6 +153,7 @@ podTemplate(
                         sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"${registrySecret}\"}]}' --namespace ${namespace}"
                      }
 	          fi
+------------------------*/
                }	
                container ('helm') {
                   echo "Attempting to deploy the test release"
