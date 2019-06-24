@@ -119,7 +119,7 @@ podTemplate(
 			echo "Tagging image ${image}:${imageTag} ${registry}${namespace}/${image}:${imageTag}"
                         sh "docker tag ${image}:${imageTag} ${registry}${namespace}/${image}:${imageTag}"
 		        echo 'Pushing to Docker registry'
-                        sh "docker push ${registry}${namespace}${image}:${imageTag}"
+                        sh "docker push ${registry}${namespace}/${image}:${imageTag}"
 		        'Done pushing to Docker registry'
                      }
 		  }
