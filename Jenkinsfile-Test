@@ -164,7 +164,7 @@ podTemplate(
 
                container ('kubectl') {
 	          echo 'In kubectl container'
-	          NSExists = sh(returnStatus: true, script "kubectl get namespace ${namespace}")
+	          NSExists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
 	          if (NSExists == 0) {
 	            echo "Namespace ${namespace} exists"
 	          } else {
