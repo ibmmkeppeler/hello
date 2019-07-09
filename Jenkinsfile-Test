@@ -192,7 +192,7 @@ podTemplate(
                       if (releaseRevision == "1") {
                         // This is the only revision available - purge and proceed to reinstall.
                         sh "helm del --purge ${tempHelmRelease} --tls"
-                      else {
+                      } else {
                         // There is a previous revision, rollback to it.
                         releaseRevision = sh (script: "helm history ${tempHelmRelease} --tls | tail -2 | head -1 | awk '{ print \$1}'", returnStdout: true).trim()
                         sh "helm rollback ${tempHelmRelease} ${releaseRevision} --tls"
