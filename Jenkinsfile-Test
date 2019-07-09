@@ -164,12 +164,12 @@ podTemplate(
 
                container ('kubectl') {
 	          echo 'In kubectl container'
+------------------------*/
 	          NSExists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
 	          if (NSExists == 0) {
 	            echo "Namespace ${namespace} exists"
 	          } else {
 		    echo "Warning, Namespace ${namespace} does not exist, need to create it"
-/*------------------------
                     def NSCreationAttempt = sh(returnStatus: true, script: "kubectl create namespace ${namespace} > ns_creation_attempt.txt")
                     if (NSCreationAttempt != 0) {
                       echo "Warning, did not create the test namespace successfully, error code is: ${NSCreationAttempt}"		
@@ -179,8 +179,8 @@ podTemplate(
                        sh "kubectl get secret ${registrySecret} -o json | sed 's/\"namespace\":.*\$/\"namespace\": \"${namespace}\",/g' | kubectl create -f -"
                        sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"${registrySecret}\"}]}' --namespace ${namespace}"
                     }
-------------------------*/
 	          }
+------------------------*/
                }	
                container ('helm') {
 	          // Check if the release exists at all.
