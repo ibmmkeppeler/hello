@@ -219,7 +219,7 @@ podTemplate(
                         echo "This build will be marked as a failure: halting after the deletion of the test namespace."
                       }
                       printFromFile("upgrade_attempt.txt") 
-/*------------------------
+------------------------*/
 		    }
                   } else {
 		    // The release does not exist, proceed and deploy a new release
