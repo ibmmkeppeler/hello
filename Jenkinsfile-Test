@@ -200,7 +200,9 @@ podTemplate(
                         sh "helm rollback ${tempHelmRelease} ${releaseRevision} ${helmTlsOptions}"
                       }
                     } else {
-		      // The release is in RUNNING state. Attempt to upgrade
+		      echo "RELEASE IS RUNNING"
+/*------------------------
+                      // The release is in RUNNING state. Attempt to upgrade
 		      getValues = sh (script: "helm get values ${tempHelmRelease} -o yaml ${helmTlsOptions} > values.yaml", returnStatus: true)
                       def upgradeCommand = "helm upgrade ${realChartFolder} --wait --set test=true --values values.yaml --namespace ${namespace} --name ${tempHelmRelease}"
                       if (fileExists("chart/overrides.yaml")) {
@@ -211,7 +213,6 @@ podTemplate(
                         upgradeCommand += helmTlsOptions
                       }
 		      echo "UPGRADING COMMAND: ${upgradeCommand}"
-/*------------------------
                       testUpgradeAttempt = sh(script: "${upgradeCommand} > upgrade_attempt.txt", returnStatus: true)
                       if (testUpgradeAttempt != 0) {
                         echo "Warning, did not upgrade the test release into the test namespace successfully, error code is: ${testUpgradeAttempt}" 
