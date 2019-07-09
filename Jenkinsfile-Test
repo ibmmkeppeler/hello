@@ -164,22 +164,23 @@ podTemplate(
 
                container ('kubectl') {
 	          echo 'In kubectl container'
-/*------------------------
-	          kubectl get namespace ${namespace}
-	           if [ $? -eq 0 ]; then
+	          NSExists = sh(returnStatus: true, script "kubectl get namespace ${namespace}")
+	          if (NSExists == 0) {
 	            echo "Namespace ${namespace} exists
-	          else
-                     def NSCreationAttempt = sh(returnStatus: true, script: "kubectl create namespace ${namespace} > ns_creation_attempt.txt")
-                     if (NSCreationAttempt != 0) {
-                        echo "Warning, did not create the test namespace successfully, error code is: ${NSCreationAttempt}"		
-                     }
-                     if (registrySecret) {
-		        // Give access to the private registry
-                        sh "kubectl get secret ${registrySecret} -o json | sed 's/\"namespace\":.*\$/\"namespace\": \"${namespace}\",/g' | kubectl create -f -"
-                        sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"${registrySecret}\"}]}' --namespace ${namespace}"
-                     }
-	          fi
+	          } else {
+		    echo "Warning, Namespace ${namespace} does not exist, need to create it"
+/*------------------------
+                    def NSCreationAttempt = sh(returnStatus: true, script: "kubectl create namespace ${namespace} > ns_creation_attempt.txt")
+                    if (NSCreationAttempt != 0) {
+                      echo "Warning, did not create the test namespace successfully, error code is: ${NSCreationAttempt}"		
+                    }
+                    if (registrySecret) {
+		       // Give access to the private registry
+                       sh "kubectl get secret ${registrySecret} -o json | sed 's/\"namespace\":.*\$/\"namespace\": \"${namespace}\",/g' | kubectl create -f -"
+                       sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"${registrySecret}\"}]}' --namespace ${namespace}"
+                    }
 ------------------------*/
+	          }
                }	
                container ('helm') {
 	          // Check if the release exists at all.
@@ -198,8 +199,29 @@ podTemplate(
                         releaseRevision = sh (script: "helm history ${tempHelmRelease} ${helmTlsOptions} | tail -2 | head -1 | awk '{ print \$1}'", returnStdout: true).trim()
                         sh "helm rollback ${tempHelmRelease} ${releaseRevision} ${helmTlsOptions}"
                       }
-                    }
-                  } else {	       
+                    } else {
+		      // The release is in RUNNING state. Attempt to upgrade
+		      getValues = sh (script: "helm get values ${tempHelmRelease} -o yaml ${helmTlsOptions} > values.yaml", returnStatus: true)
+                      def upgradeCommand = "helm upgrade ${realChartFolder} --wait --set test=true --values values.yaml --namespace ${namespace} --name ${tempHelmRelease}"
+                      if (fileExists("chart/overrides.yaml")) {
+                        upgradeCommand += " --values chart/overrides.yaml"
+                      }
+                      if (helmSecret) {
+                        echo "Adding --tls to your deploy command"
+                        upgradeCommand += helmTlsOptions
+                      }
+		      echo "UPGRADING COMMAND: ${upgradeCommand}"
+/*------------------------
+                      testUpgradeAttempt = sh(script: "${upgradeCommand} > upgrade_attempt.txt", returnStatus: true)
+                      if (testUpgradeAttempt != 0) {
+                        echo "Warning, did not upgrade the test release into the test namespace successfully, error code is: ${testUpgradeAttempt}" 
+                        echo "This build will be marked as a failure: halting after the deletion of the test namespace."
+                      }
+                      printFromFile("upgrade_attempt.txt") 
+/*------------------------
+		    }
+                  } else {
+		    // The release does not exist, proceed and deploy a new release
                     echo "Attempting to deploy the test release"
                     def deployCommand = "helm install ${realChartFolder} --wait --set test=true --values pipeline.yaml --namespace ${namespace} --name ${tempHelmRelease}"
                     if (fileExists("chart/overrides.yaml")) {
