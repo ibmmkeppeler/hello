@@ -164,12 +164,12 @@ podTemplate(
 
                container ('kubectl') {
 	          echo 'In kubectl container'
-------------------------*/
 	          NSExists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
 	          if (NSExists == 0) {
 	            echo "Namespace ${namespace} exists"
 	          } else {
 		    echo "Warning, Namespace ${namespace} does not exist, need to create it"
+/*------------------------
                     def NSCreationAttempt = sh(returnStatus: true, script: "kubectl create namespace ${namespace} > ns_creation_attempt.txt")
                     if (NSCreationAttempt != 0) {
                       echo "Warning, did not create the test namespace successfully, error code is: ${NSCreationAttempt}"		
@@ -179,8 +179,8 @@ podTemplate(
                        sh "kubectl get secret ${registrySecret} -o json | sed 's/\"namespace\":.*\$/\"namespace\": \"${namespace}\",/g' | kubectl create -f -"
                        sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"${registrySecret}\"}]}' --namespace ${namespace}"
                     }
-	          }
 ------------------------*/
+	          }
                }	
                container ('helm') {
 	          // Check if the release exists at all.
@@ -201,7 +201,6 @@ podTemplate(
                       }
                     } else {
 		      echo "RELEASE IS RUNNING"
-/*------------------------
                       // The release is in RUNNING state. Attempt to upgrade
 		      getValues = sh (script: "helm get values ${tempHelmRelease} -o yaml ${helmTlsOptions} > values.yaml", returnStatus: true)
                       def upgradeCommand = "helm upgrade ${realChartFolder} --wait --set test=true --values values.yaml --namespace ${namespace} --name ${tempHelmRelease}"
@@ -213,6 +212,7 @@ podTemplate(
                         upgradeCommand += helmTlsOptions
                       }
 		      echo "UPGRADING COMMAND: ${upgradeCommand}"
+/*------------------------
                       testUpgradeAttempt = sh(script: "${upgradeCommand} > upgrade_attempt.txt", returnStatus: true)
                       if (testUpgradeAttempt != 0) {
                         echo "Warning, did not upgrade the test release into the test namespace successfully, error code is: ${testUpgradeAttempt}" 
