@@ -54,6 +54,7 @@ podTemplate(
             def fullCommitID
 	    
 	    def imageTag = null
+	    def helmInitialized = false // Lazily initialize Helm but only once
 
             stage ('Extract') {
 	       try {
@@ -181,7 +182,16 @@ podTemplate(
                     }
 ------------------------*/
 	          }
-               }	
+               }
+	       
+               if (!helmInitialized) {
+	         printTime("Init helm")
+                 initalizeHelm ()
+                 helmInitialized = true
+	         printTime("Done with init helm")
+               }
+
+	       
                container ('helm') {
 	          // Check if the release exists at all.
                   isReleaseExists = sh(script: "helm list -q --namespace ${namespace} ${helmTlsOptions} | tr '\\n' ','", returnStdout: true)
@@ -252,6 +262,13 @@ def printTime(String message) {
 def printFromFile(String fileName) {
    def output = readFile(fileName).trim()
    echo output
+}
+
+def initalizeHelm () {
+  container ('helm') {
+    sh "helm init --skip-refresh --client-only"
+    sh "helm repo add local-charts https://icptest.icp:8443/helm-repo/charts --ca-file /msb_helm_sec/ca.pem --cert-file /msb_helm_sec/cert.pem --key-file /msb_helm_sec/key.pem"
+  }
 }
 
 def getChartFolder(String userSpecified, String currentChartFolder) {
