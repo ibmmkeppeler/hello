@@ -243,6 +243,8 @@ podTemplate(
                        deployCommand += helmTlsOptions
                     }
                     testDeployAttempt = sh(script: "${deployCommand} > deploy_attempt.txt", returnStatus: true)
+		    slackSend (channel: "k8s_cont-adoption", color: '#199515', message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> deployed successfully.")
+
                     if (testDeployAttempt != 0) {
                        echo "Warning, did not deploy the test release into the test namespace successfully, error code is: ${testDeployAttempt}" 
                        echo "This build will be marked as a failure: halting after the deletion of the test namespace."
