@@ -55,6 +55,7 @@ podTemplate(
 	    
 	    def imageTag = null
 	    def helmInitialized = false // Lazily initialize Helm but only once
+            def slackResponse = slackSend(channel: "k8s_cont-adoption", message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> Has been started.")
 
             stage ('Extract') {
 	       try {
@@ -222,14 +223,14 @@ podTemplate(
                         upgradeCommand += helmTlsOptions
                       }
 		      echo "UPGRADING COMMAND: ${upgradeCommand}"
-/*------------------------
                       testUpgradeAttempt = sh(script: "${upgradeCommand} > upgrade_attempt.txt", returnStatus: true)
                       if (testUpgradeAttempt != 0) {
                         echo "Warning, did not upgrade the test release into the test namespace successfully, error code is: ${testUpgradeAttempt}" 
                         echo "This build will be marked as a failure: halting after the deletion of the test namespace."
+                      } else {
+		        slackSend (channel: slackResponse.threadId, color: '#199515', message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> upgraded successfully.")
                       }
                       printFromFile("upgrade_attempt.txt") 
-------------------------*/
 		    }
                   } else {
 		    // The release does not exist, proceed and deploy a new release
@@ -243,7 +244,7 @@ podTemplate(
                        deployCommand += helmTlsOptions
                     }
                     testDeployAttempt = sh(script: "${deployCommand} > deploy_attempt.txt", returnStatus: true)
-		    slackSend (channel: "k8s_cont-adoption", color: '#199515', message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> deployed successfully.")
+		    // slackSend (channel: "k8s_cont-adoption", color: '#199515', message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> deployed successfully.")
 
                     if (testDeployAttempt != 0) {
                        echo "Warning, did not deploy the test release into the test namespace successfully, error code is: ${testDeployAttempt}" 
