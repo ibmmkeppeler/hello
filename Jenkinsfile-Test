@@ -269,7 +269,7 @@ def printFromFile(String fileName) {
 def initalizeHelm () {
   container ('helm') {
     sh "helm init --skip-refresh --client-only"
-    sh "helm repo add local-charts https://icptest.icp:8443/helm-repo/charts --ca-file /msb_helm_sec/ca.pem --cert-file /msb_helm_sec/cert.pem --key-file /msb_helm_sec/key.pem"
+    sh "helm repo add local-charts https://158.176.129.209:8443/helm-repo/charts --ca-file /msb_helm_sec/ca.pem --cert-file /msb_helm_sec/cert.pem --key-file /msb_helm_sec/key.pem"
   }
 }
 
