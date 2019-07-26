@@ -95,9 +95,9 @@ podTemplate(
               } catch(Exception ex) {
                 print "Error in Maven build:" + ex.toString()
               }
-              echo 'Checkin Application into git'
+              // echo 'Checkin Application into git'
               // /home/jenkins/workspace/hello/target
-              commitStatus = sh(script: 'git commit -am "Checking application code"', returnStatus: true)      
+              // commitStatus = sh(script: 'git commit -am "Checking application code"', returnStatus: true)      
 
             }
           }
