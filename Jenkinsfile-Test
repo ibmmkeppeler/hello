@@ -5,14 +5,16 @@ import groovy.json.JsonOutput;
 import groovy.json.JsonSlurperClassic;
 
 def build = (env.BUILD ?: "true").toBoolean()
-def dockerbuild = (env.DOCKERBUILD ?: "false").toBoolean()
+def dockerbuild = (env.DOCKERBUILD ?: "true").toBoolean()
 def deploy = (env.DEPLOY ?: "false").toBoolean()
 def mvnCommands = (env.mvnCommands == null) ? 'package' : env.mvnCommands
 def mavenSettingsConfigMap = env.MAVEN_SETTINGS_CONFIG_MAP?.trim()
 def test = (env.TEST ?: "true").toBoolean()
 
 def image = (env.IMAGE ?: "hello-container").trim()
-def baseimage = (env.BASEIMAGE ?: "websphere-liberty:19.0.0.6-webProfile8").trim()
+// def baseimage = (env.BASEIMAGE ?: "websphere-liberty:19.0.0.6-webProfile8").trim()
+def baseimage = (env.BASEIMAGE ?: "open-liberty:webProfile8-java8-openj9").trim()
+def basetag = (env.BASETAG ?: "webProfile8-java8-openj9").trim()
 def alwaysPullImage = (env.ALWAYS_PULL_IMAGE == null) ? true : env.ALWAYS_PULL_IMAGE.toBoolean()
 def libertyLicenseJarBaseUrl = (env.LIBERTY_LICENSE_JAR_BASE_URL ?: "").trim()
 def registry = (env.REGISTRY ?: "icptest.icp:8500").trim()
@@ -20,7 +22,7 @@ if (registry && !registry.endsWith('/')) registry = "${registry}/"
 def registrySecret = (env.REGISTRY_SECRET ?: "registrysecret").trim()
 def dockerUser = (env.DOCKER_USER ?: "admin").trim()
 def dockerPassword = (env.DOCKER_PASSWORD ?: "5e914c585c2b51edfd1213f059dd38a3").trim()
-def namespace = (env.NAMESPACE ?: "default").trim()
+def namespace = (env.NAMESPACE ?: "operators").trim()
 def serviceAccountName = (env.SERVICE_ACCOUNT_NAME ?: "default").trim()
 def chartFolder = (env.CHART_FOLDER ?: "chart").trim()
 def helmSecret = (env.HELM_SECRET ?: "helm-secret").trim()
@@ -110,7 +112,7 @@ podTemplate(
 		     
                   echo 'Start Building Image'
 		     
-		              imageTag = gitCommit
+		              imageTag =  basetag // gitCommit
                   def buildCommand = "docker build -t ${image}:${imageTag} "
                   buildCommand += "--label org.label-schema.schema-version=\"1.0\" "
                   // def scmUrl = scm.getUserRemoteConfigs()[0].getUrl()
