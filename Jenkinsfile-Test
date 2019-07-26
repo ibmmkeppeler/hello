@@ -89,13 +89,14 @@ podTemplate(
                   mvnCommand += " ${mvnCommands}"
                   sh mvnCommand
 		              echo 'Finished Maven Build'
-                  echo 'Checkin Application into git'
-                  // /home/jenkins/workspace/hello/target
-                  commitStatus = sh(script: 'git commit -am "Checking application code"', returnStatus: true)      
                 }
               } catch(Exception ex) {
                 print "Error in Maven build:" + ex.toString()
               }
+              echo 'Checkin Application into git'
+              // /home/jenkins/workspace/hello/target
+              commitStatus = sh(script: 'git commit -am "Checking application code"', returnStatus: true)      
+
             }
           }
           if (dockerbuild) {
