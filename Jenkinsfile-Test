@@ -5,7 +5,8 @@ import groovy.json.JsonOutput;
 import groovy.json.JsonSlurperClassic;
 
 def build = (env.BUILD ?: "true").toBoolean()
-def deploy = (env.DEPLOY ?: "true").toBoolean()
+def dockerbuild = (env.DOCKERBUILD ?: "false").toBoolean()
+def deploy = (env.DEPLOY ?: "false").toBoolean()
 def mvnCommands = (env.mvnCommands == null) ? 'package' : env.mvnCommands
 def mavenSettingsConfigMap = env.MAVEN_SETTINGS_CONFIG_MAP?.trim()
 def test = (env.TEST ?: "true").toBoolean()
@@ -36,165 +37,168 @@ if (helmSecret) {
 podTemplate(
     label: 'test',
     containers: [
-        containerTemplate(name: 'maven', image: 'maven:3.6.0-jdk-8-alpine', ttyEnabled: true, command: 'cat'),
-        containerTemplate(name: 'docker', image: 'docker:18.06.1-ce', command: 'cat', ttyEnabled: true,
-            envVars: [
-                containerEnvVar(key: 'DOCKER_API_VERSION', value: '1.23.0')
-            ]),
-        containerTemplate(name: 'kubectl', image: 'ibmcom/microclimate-utils:1901', ttyEnabled: true, command: 'cat'),
-        // containerTemplate(name: 'helm', image: 'ibmcom/microclimate-k8s-helm:v2.12.3', ttyEnabled: true, command: 'cat')
-	containerTemplate(name: 'helm', image: 'icptest.icp:8500/ibmcom/helm:1.0.0', ttyEnabled: true, command: 'cat')
+      containerTemplate(name: 'maven', image: 'maven:3.6.0-jdk-8-alpine', ttyEnabled: true, command: 'cat'),
+      containerTemplate(name: 'docker', image: 'docker:18.06.1-ce', command: 'cat', ttyEnabled: true,
+        envVars: [
+          containerEnvVar(key: 'DOCKER_API_VERSION', value: '1.23.0')
+        ]),
+      containerTemplate(name: 'kubectl', image: 'ibmcom/microclimate-utils:1901', ttyEnabled: true, command: 'cat'),
+      // containerTemplate(name: 'helm', image: 'ibmcom/microclimate-k8s-helm:v2.12.3', ttyEnabled: true, command: 'cat')
+      containerTemplate(name: 'helm', image: 'icptest.icp:8500/ibmcom/helm:1.0.0', ttyEnabled: true, command: 'cat')
     ],
     volumes: volumes
     ) {
         node('test'){
-	    def gitCommit
-            def previousCommit
-            def gitCommitMessage
-            def fullCommitID
+	        def gitCommit
+          def previousCommit
+          def gitCommitMessage
+          def fullCommitID
 	    
-	    def imageTag = null
-	    def helmInitialized = false // Lazily initialize Helm but only once
-            def slackResponse = slackSend(channel: "k8s_cont-adoption", message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> Has been started.")
+	        def imageTag = null
+	        def helmInitialized = false // Lazily initialize Helm but only once
+          def slackResponse = slackSend(channel: "k8s_cont-adoption", message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> Has been started.")
 
-            stage ('Extract') {
-	       try {
-                  checkout scm
-                  fullCommitID = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                  gitCommit = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-                  previousCommitStatus = sh(script: 'git rev-parse -q --short HEAD~1', returnStatus: true)      
-                  // If no previous commit is found, below commands need not run but build should continue
-                  // Only run when a previous commit exists to avoid pipeline fail on exit code
-                  if (previousCommitStatus == 0){ 
-                     previousCommit = sh(script: 'git rev-parse -q --short HEAD~1', returnStdout: true).trim()
-                     echo "Previous commit exists: ${previousCommit}"
-                  }
-                  gitCommitMessage = sh(script: 'git log --format=%B -n 1 ${gitCommit}', returnStdout: true)
-	          gitCommitMessage = gitCommitMessage.replace("'", "\'");
-                  echo "Git commit message is: ${gitCommitMessage}"
-                  echo "Checked out git commit ${gitCommit}"
-               } catch(Exception ex) {
-                  print "Error in Extract: " + ex.toString()
-               }
-	    }
+          stage ('Extract') {
+	          try {
+              checkout scm
+              fullCommitID = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+              gitCommit = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+              previousCommitStatus = sh(script: 'git rev-parse -q --short HEAD~1', returnStatus: true)      
+              // If no previous commit is found, below commands need not run but build should continue
+              // Only run when a previous commit exists to avoid pipeline fail on exit code
+              if (previousCommitStatus == 0){ 
+                previousCommit = sh(script: 'git rev-parse -q --short HEAD~1', returnStdout: true).trim()
+                echo "Previous commit exists: ${previousCommit}"
+              }
+              gitCommitMessage = sh(script: 'git log --format=%B -n 1 ${gitCommit}', returnStdout: true)
+	            gitCommitMessage = gitCommitMessage.replace("'", "\'");
+              echo "Git commit message is: ${gitCommitMessage}"
+              echo "Checked out git commit ${gitCommit}"
+            } catch(Exception ex) {
+              print "Error in Extract: " + ex.toString()
+            }
+	        }
+          if (build) {
             stage ('Maven Build') {
-               try {
-                   container ('maven') {
-                       def mvnCommand = "mvn -B"
-                       if (mavenSettingsConfigMap) {
-                           mvnCommand += " --settings /msb_mvn_cfg/settings.xml"
-                       }
-                       mvnCommand += " ${mvnCommands}"
-                       sh mvnCommand
-		       echo 'Finished Maven Build'
-                   }
-               } catch(Exception ex) {
-                   print "Error in Maven build:" + ex.toString()
-               }
+              try {
+                container ('maven') {
+                  def mvnCommand = "mvn -B"
+                  if (mavenSettingsConfigMap) {
+                    mvnCommand += " --settings /msb_mvn_cfg/settings.xml"
+                  }
+                  mvnCommand += " ${mvnCommands}"
+                  sh mvnCommand
+		              echo 'Finished Maven Build'
+                  echo 'Checkin Application into git'
+                  // /home/jenkins/workspace/hello/target
+                  commitStatus = sh(script: 'git commit -am "Checking application code"', returnStatus: true)      
+                }
+              } catch(Exception ex) {
+                print "Error in Maven build:" + ex.toString()
+              }
             }
+          }
+          if (dockerbuild) {
             stage('Build'){
-	       try {
-                  // checkout scm
-                  container('docker') {
-		     echo 'Set Base Image'
-		     sh "sed -i 's/^FROM.*/FROM ${baseimage}/g' Dockerfile"
-		     sh "cat Dockerfile"
+	            try {
+                // checkout scm
+                container('docker') {
+		              echo 'Set Base Image'
+		              sh "sed -i 's/^FROM.*/FROM ${baseimage}/g' Dockerfile"
+		              sh "cat Dockerfile"
 		     
-                     echo 'Start Building Image'
+                  echo 'Start Building Image'
 		     
-		     imageTag = gitCommit
-                     def buildCommand = "docker build -t ${image}:${imageTag} "
-                     buildCommand += "--label org.label-schema.schema-version=\"1.0\" "
-                     // def scmUrl = scm.getUserRemoteConfigs()[0].getUrl()
-                     // buildCommand += "--label org.label-schema.vcs-url=\"${scmUrl}\" "
-                     buildCommand += "--label org.label-schema.vcs-ref=\"${gitCommit}\" "  
-                     buildCommand += "--label org.label-schema.name=\"${image}\" "
-                     def buildDate = sh(returnStdout: true, script: "date -Iseconds").trim()
-                     buildCommand += "--label org.label-schema.build-date=\"${buildDate}\" "
-                     if (alwaysPullImage) {
-                        buildCommand += " --pull=true"
-                     }
-                     if (previousCommit) {
-                        buildCommand += " --cache-from ${registry}${image}:${previousCommit}"
-                     }
-                     if (libertyLicenseJarBaseUrl) {
-                        if (readFile('Dockerfile').contains('LICENSE_JAR_URL')) {
-                           buildCommand += " --build-arg LICENSE_JAR_URL=" + libertyLicenseJarBaseUrl
-                           if (!libertyLicenseJarBaseUrl.endsWith("/")) {
-                              buildCommand += "/"
-                           }
-                           buildCommand += libertyLicenseJarName
-                        }
-                     }
-                     buildCommand += " ."
-		     if (registrySecret) {
-                        sh "ln -s -f /msb_reg_sec/.dockercfg /home/jenkins/.dockercfg"
-                        sh "mkdir -p /home/jenkins/.docker"
-                        sh "ln -s -f /msb_reg_sec/.dockerconfigjson /home/jenkins/.docker/config.json"
-                     }
-                     sh buildCommand
-                     if (registry) {
-		        // sh "docker login -u=${dockerUser} -p=${dockerPassword} ${registry}"
-			echo "Tagging image ${image}:${imageTag} ${registry}${namespace}/${image}:${imageTag}"
-                        sh "docker tag ${image}:${imageTag} ${registry}${namespace}/${image}:${imageTag}"
-		        echo 'Pushing to Docker registry'
-                        sh "docker push ${registry}${namespace}/${image}:${imageTag}"
-		        'Done pushing to Docker registry'
-                     }
-		  }
-               } catch(Exception ex) {
-                   print "Error in Docker build: " + ex.toString()
-	       }
+		              imageTag = gitCommit
+                  def buildCommand = "docker build -t ${image}:${imageTag} "
+                  buildCommand += "--label org.label-schema.schema-version=\"1.0\" "
+                  // def scmUrl = scm.getUserRemoteConfigs()[0].getUrl()
+                  // buildCommand += "--label org.label-schema.vcs-url=\"${scmUrl}\" "
+                  buildCommand += "--label org.label-schema.vcs-ref=\"${gitCommit}\" "  
+                  buildCommand += "--label org.label-schema.name=\"${image}\" "
+                  def buildDate = sh(returnStdout: true, script: "date -Iseconds").trim()
+                  buildCommand += "--label org.label-schema.build-date=\"${buildDate}\" "
+                  if (alwaysPullImage) {
+                    buildCommand += " --pull=true"
+                  }
+                  if (previousCommit) {
+                    buildCommand += " --cache-from ${registry}${image}:${previousCommit}"
+                  }
+                  if (libertyLicenseJarBaseUrl) {
+                    if (readFile('Dockerfile').contains('LICENSE_JAR_URL')) {
+                      buildCommand += " --build-arg LICENSE_JAR_URL=" + libertyLicenseJarBaseUrl
+                      if (!libertyLicenseJarBaseUrl.endsWith("/")) {
+                        buildCommand += "/"
+                      }
+                      buildCommand += libertyLicenseJarName
+                    }
+                  }
+                  buildCommand += " ."
+		              if (registrySecret) {
+                    sh "ln -s -f /msb_reg_sec/.dockercfg /home/jenkins/.dockercfg"
+                    sh "mkdir -p /home/jenkins/.docker"
+                    sh "ln -s -f /msb_reg_sec/.dockerconfigjson /home/jenkins/.docker/config.json"
+                  }
+                  sh buildCommand
+                  if (registry) {
+                    echo "Tagging image ${image}:${imageTag} ${registry}${namespace}/${image}:${imageTag}"
+                    sh "docker tag ${image}:${imageTag} ${registry}${namespace}/${image}:${imageTag}"
+                    echo 'Pushing to Docker registry'
+                    sh "docker push ${registry}${namespace}/${image}:${imageTag}"
+		                echo 'Done pushing to Docker registry'
+                  }
+		            }
+              } catch(Exception ex) {
+                print "Error in Docker build: " + ex.toString()
+	            }
             }
+          }
+	        def realChartFolder = null
+          def testsAttempted = false
 	    
-	    def realChartFolder = null
-            def testsAttempted = false
-	    
-            if (fileExists(chartFolder)) {
-               // find the likely chartFolder location
-               realChartFolder = getChartFolder('chart/hello', chartFolder)
-               def yamlContent = "image:"
-               yamlContent += "\n  repository: ${registry}${namespace}/${image}"
-               if (imageTag) yamlContent += "\n  tag: \\\"${imageTag}\\\""
-               sh "echo \"${yamlContent}\" > pipeline.yaml"
-            }
+          if (fileExists(chartFolder)) {
+            // find the likely chartFolder location
+            realChartFolder = getChartFolder('chart/hello', chartFolder)
+            def yamlContent = "image:"
+            yamlContent += "\n  repository: ${registry}${namespace}/${image}"
+            if (imageTag) yamlContent += "\n  tag: \\\"${imageTag}\\\""
+            sh "echo \"${yamlContent}\" > pipeline.yaml"
+          }
+          if (deploy) { 
+	          stage ('Deploy') {
+	            echo'Deploy helm chart'
+              echo "testing against namespace " + namespace
+              String tempHelmRelease = (image + "-" + namespace)
 
-	    stage ('Deploy') {
-	       echo'Deploy helm chart'
-               echo "testing against namespace " + namespace
-               String tempHelmRelease = (image + "-" + namespace)
-
-               container ('kubectl') {
-	          echo 'In kubectl container'
-	          NSExists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
-	          if (NSExists == 0) {
-	            echo "Namespace ${namespace} exists"
-	          } else {
-		    echo "Warning, Namespace ${namespace} does not exist, need to create it"
+              container ('kubectl') {
+	              echo 'In kubectl container'
+	              NSExists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
+	              if (NSExists == 0) {
+	              echo "Namespace ${namespace} exists"
+	              } else {
+		              echo "Warning, Namespace ${namespace} does not exist, need to create it"
 /*------------------------
                     def NSCreationAttempt = sh(returnStatus: true, script: "kubectl create namespace ${namespace} > ns_creation_attempt.txt")
                     if (NSCreationAttempt != 0) {
                       echo "Warning, did not create the test namespace successfully, error code is: ${NSCreationAttempt}"		
                     }
                     if (registrySecret) {
-		       // Give access to the private registry
+		                // Give access to the private registry
                        sh "kubectl get secret ${registrySecret} -o json | sed 's/\"namespace\":.*\$/\"namespace\": \"${namespace}\",/g' | kubectl create -f -"
                        sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"${registrySecret}\"}]}' --namespace ${namespace}"
                     }
 ------------------------*/
-	          }
-               }
-	       
-               if (!helmInitialized) {
-	         printTime("Init helm")
-                 initalizeHelm ()
-                 helmInitialized = true
-	         printTime("Done with init helm")
-               }
+	                }
+                }
+                if (!helmInitialized) {
+	                printTime("Init helm")
+                  initalizeHelm ()
+                  helmInitialized = true
+	                printTime("Done with init helm")
+                }
 
-	       
-               container ('helm') {
-	          // Check if the release exists at all.
+                container ('helm') {
+	                // Check if the release exists at all.
                   isReleaseExists = sh(script: "helm list -q --namespace ${namespace} ${helmTlsOptions} | tr '\\n' ','", returnStdout: true)
                   if (isReleaseExists.contains("${tempHelmRelease}")) {
                     // The release exists, check it's status.
@@ -211,9 +215,9 @@ podTemplate(
                         sh "helm rollback ${tempHelmRelease} ${releaseRevision} ${helmTlsOptions}"
                       }
                     } else {
-		      echo "RELEASE IS RUNNING"
+		                  echo "RELEASE IS RUNNING"
                       // The release is in RUNNING state. Attempt to upgrade
-		      getValues = sh (script: "helm get values ${tempHelmRelease} -output yaml ${helmTlsOptions} > values.yaml", returnStatus: true)
+		                  getValues = sh (script: "helm get values ${tempHelmRelease} -output yaml ${helmTlsOptions} > values.yaml", returnStatus: true)
                       def upgradeCommand = "helm upgrade ${tempHelmRelease} ${realChartFolder} --wait --values values.yaml --namespace ${namespace}"
                       if (fileExists("chart/overrides.yaml")) {
                         upgradeCommand += " --values chart/overrides.yaml"
@@ -222,18 +226,18 @@ podTemplate(
                         echo "Adding --tls to your deploy command"
                         upgradeCommand += helmTlsOptions
                       }
-		      echo "UPGRADING COMMAND: ${upgradeCommand}"
+		                  echo "UPGRADING COMMAND: ${upgradeCommand}"
                       testUpgradeAttempt = sh(script: "${upgradeCommand} > upgrade_attempt.txt", returnStatus: true)
                       if (testUpgradeAttempt != 0) {
                         echo "Warning, did not upgrade the test release into the test namespace successfully, error code is: ${testUpgradeAttempt}" 
                         echo "This build will be marked as a failure: halting after the deletion of the test namespace."
                       } else {
-		        slackSend (channel: slackResponse.threadId, color: '#199515', message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> upgraded successfully.")
+		                    // slackSend (channel: slackResponse.threadId, color: '#199515', message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> upgraded successfully.")
                       }
                       printFromFile("upgrade_attempt.txt") 
-		    }
+		                }
                   } else {
-		    // The release does not exist, proceed and deploy a new release
+		                // The release does not exist, proceed and deploy a new release
                     echo "Attempting to deploy the test release"
                     def deployCommand = "helm install ${realChartFolder} --wait --set test=true --values pipeline.yaml --namespace ${namespace} --name ${tempHelmRelease}"
                     if (fileExists("chart/overrides.yaml")) {
@@ -244,7 +248,7 @@ podTemplate(
                        deployCommand += helmTlsOptions
                     }
                     testDeployAttempt = sh(script: "${deployCommand} > deploy_attempt.txt", returnStatus: true)
-		    // slackSend (channel: "k8s_cont-adoption", color: '#199515', message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> deployed successfully.")
+		                // slackSend (channel: "k8s_cont-adoption", color: '#199515', message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> deployed successfully.")
 
                     if (testDeployAttempt != 0) {
                        echo "Warning, did not deploy the test release into the test namespace successfully, error code is: ${testDeployAttempt}" 
@@ -252,9 +256,10 @@ podTemplate(
                     }
                     printFromFile("deploy_attempt.txt")
                   }
-               }
-	    }
-         }
+                }
+	            }
+            }
+          }
       }
       
 def printTime(String message) {
