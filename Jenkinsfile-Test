@@ -56,7 +56,7 @@ podTemplate(
 	    
 	        def imageTag = null
 	        def helmInitialized = false // Lazily initialize Helm but only once
-          def slackResponse = slackSend(channel: "k8s_cont-adoption", message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> Has been started.")
+          // def slackResponse = slackSend(channel: "k8s_cont-adoption", message: "*$JOB_NAME*: <$BUILD_URL|Build #$BUILD_NUMBER> Has been started.")
 
           stage ('Extract') {
 	          try {
